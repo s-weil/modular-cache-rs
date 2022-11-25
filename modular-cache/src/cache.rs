@@ -2,20 +2,22 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 pub trait KeyRegistry<K>: Sized {
-    type KeyStatsItem;
+    // type KeyStatsItem;
 
     fn with_capacity(max_capacity: usize) -> Self;
 
     fn init(max_capacity: Option<usize>) -> Self {
-        let mc = max_capacity.unwrap_or_else(|| usize::MAX);
+        let mc = max_capacity.unwrap_or(usize::MAX);
         Self::with_capacity(mc)
     }
 
     fn len(&self) -> usize;
 
-    fn clear(&mut self);
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
-    // fn get(&mut self, key: &K) -> Option<&mut Self::KeyStatsItem>;
+    fn clear(&mut self);
 
     /// Gets the key's value _without_ updating it's statistics.
     /// This is crucial for instance for a
@@ -73,8 +75,13 @@ where
         self.store.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        // TODO: check also key_registry to be synced
+        self.store.is_empty()
+    }
+
     /// Get the key's value _without_ updating it's statistics.
-    /// This is crucial for instance for a [`LRU cache`](link LRU cache)
+    /// Use `get_mut` in case the latter is essential.
     pub fn get(&self, key: &K) -> Option<&V> {
         self.key_registry.get(key).and_then(|k| self.store.get(k))
     }
@@ -90,7 +97,7 @@ where
     /// Inserts a key-value pair into the cache.
     /// If the cache did not have this key present, None is returned.
     /// If the cache did have this key present, the value is updated, and the old value is returned.
-    /// The key is not updated, though; this matters for types that can be == without being identical.
+    /// TODO: remove or keep? The key is not updated, though; this matters for types that can be == without being identical.
     /// See the module-level documentation for more.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if let Some(deleted_key) = self.key_registry.add_or_update(key.clone()) {

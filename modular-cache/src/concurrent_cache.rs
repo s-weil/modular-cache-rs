@@ -31,12 +31,18 @@ where
         guard.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        let guard = self.inner.read().unwrap();
+        guard.is_empty()
+    }
+
     pub fn clear(&mut self) {
         let mut guard = self.inner.write().unwrap();
         guard.clear()
     }
 
-    /// Gets the key's value
+    /// Get the key's value _without_ updating it's statistics.
+    /// Use `get_mut` in case the latter is essential.
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
         let guard = self.inner.read().unwrap();
         guard.get(key).cloned()
