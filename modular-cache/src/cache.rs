@@ -1,14 +1,30 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
-pub trait KeyRegistry<K> {
+pub trait KeyRegistry<K>: Sized {
     type KeyStatsItem;
 
-    fn init(capacity: usize) -> Self;
+    fn with_capacity(max_capacity: usize) -> Self;
+
+    fn init(max_capacity: Option<usize>) -> Self {
+        let mc = max_capacity.unwrap_or_else(|| usize::MAX);
+        Self::with_capacity(mc)
+    }
 
     fn len(&self) -> usize;
 
+    fn clear(&mut self);
+
     // fn get(&mut self, key: &K) -> Option<&mut Self::KeyStatsItem>;
+
+    /// Gets the key's value _without_ updating it's statistics.
+    /// This is crucial for instance for a
+    /// [`LRU cache`](https://en.wikipedia.org/wiki/Cache_replacement_policies#LRU)
+    /// and should be considered to not be implemented in this case.
+    fn get(&self, key: &K) -> Option<&K>;
+    // TODO: rename: 'mut' is misleading
+    // Get the key's value and updates it's statistics.
+    fn get_mut(&mut self, key: &K) -> Option<&K>;
 
     // return deleted key (if some)
     fn add_or_update(&mut self, key: K) -> Option<K>;
@@ -38,17 +54,44 @@ where
     K: Eq + Hash + Clone,
     S: KeyRegistry<K>,
 {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(max_capacity: Option<usize>) -> Self {
         Self {
             store: HashMap::new(),
-            key_registry: S::init(capacity),
+            key_registry: S::init(max_capacity),
         }
     }
 
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.store.get(key)
+    /// Clears the registry and store, removing all key-value pairs.
+    /// Keeps the allocated memory for reuse.
+    pub fn clear(&mut self) {
+        self.key_registry.clear();
+        self.store.clear();
     }
 
+    pub fn len(&self) -> usize {
+        // TODO: check also key_registry to be synced
+        self.store.len()
+    }
+
+    /// Get the key's value _without_ updating it's statistics.
+    /// This is crucial for instance for a [`LRU cache`](link LRU cache)
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.key_registry.get(key).and_then(|k| self.store.get(k))
+    }
+
+    // TODO: rename: 'mut' is misleading
+    /// Get the key's value and updates it's statistics.
+    pub fn get_mut(&mut self, key: &K) -> Option<&V> {
+        self.key_registry
+            .get_mut(key)
+            .and_then(|k| self.store.get(k))
+    }
+
+    /// Inserts a key-value pair into the cache.
+    /// If the cache did not have this key present, None is returned.
+    /// If the cache did have this key present, the value is updated, and the old value is returned.
+    /// The key is not updated, though; this matters for types that can be == without being identical.
+    /// See the module-level documentation for more.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if let Some(deleted_key) = self.key_registry.add_or_update(key.clone()) {
             self.store.remove(&deleted_key);
@@ -56,6 +99,8 @@ where
         self.store.insert(key, value)
     }
 
+    /// TODO: make sure keys are aligne within registry and store
+    /// Removes a key from the cache, returning the stored key and value if the key was previously in the cache.
     pub fn remove(&mut self, key: &K) -> Option<(K, V)> {
         self.key_registry
             .try_remove(key)

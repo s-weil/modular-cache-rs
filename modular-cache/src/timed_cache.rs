@@ -30,11 +30,11 @@ pub struct TimedKeyRegistry<K> {
 
 impl<K> KeyRegistry<K> for TimedKeyRegistry<K>
 where
-    K: Hash + Eq + Clone,
+    K: Hash + Eq + PartialEq + Clone,
 {
     type KeyStatsItem = TimedKey<K>;
 
-    fn init(max_capacity: usize) -> Self {
+    fn with_capacity(max_capacity: usize) -> Self {
         Self {
             ordered_keys: VecDeque::with_capacity(max_capacity),
             max_capacity,
@@ -49,6 +49,24 @@ where
     //     }
     //     None
     // }
+
+    fn clear(&mut self) {
+        self.ordered_keys.clear();
+    }
+
+    fn get(&self, key: &K) -> Option<&K> {
+        self.ordered_keys
+            .iter()
+            .find(|tk| &tk.key == key)
+            .map(|tk| &tk.key)
+    }
+
+    fn get_mut(&mut self, key: &K) -> Option<&K> {
+        self.ordered_keys
+            .iter()
+            .find(|tk| &tk.key == key)
+            .map(|tk| &tk.key)
+    }
 
     fn len(&self) -> usize {
         self.ordered_keys.len()
@@ -92,7 +110,7 @@ mod tests {
 
     #[test]
     fn timed_cache_init() {
-        let mut cache = TimedCache::<i32, String>::new(4);
+        let mut cache = TimedCache::<i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -100,7 +118,7 @@ mod tests {
         cache.insert(5, "Doing".to_string());
         cache.insert(2, "How".to_string());
 
-        assert_eq!(cache.key_registry.len(), 4);
+        assert_eq!(cache.len(), 4);
 
         assert_eq!(cache.get(&1), None);
         assert_eq!(cache.get(&2).cloned(), Some("How".to_string()));
