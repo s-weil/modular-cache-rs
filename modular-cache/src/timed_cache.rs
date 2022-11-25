@@ -1,4 +1,7 @@
-use crate::cache::{Cache, KeyRegistry};
+use crate::{
+    cache::{Cache, KeyRegistry},
+    concurrent_cache::ConcurrentCache,
+};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -106,6 +109,7 @@ where
 }
 
 pub type TimedCache<K, V> = Cache<K, TimedKeyRegistry<K>, V>;
+pub type ConcurrentTimedCache<K, V> = ConcurrentCache<K, TimedKeyRegistry<K>, V>;
 
 /// Takes O(1) for finding the keys, but higher memory footprint for having the lookup.
 #[derive(Debug)]
@@ -216,10 +220,12 @@ where
 }
 
 pub type TimedCacheV2<K, V> = Cache<K, TimedKeyRegistry2<K>, V>;
+pub type ConcurrentTimedCacheV2<K, V> = ConcurrentCache<K, TimedKeyRegistry2<K>, V>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn timed_cache_init() {
@@ -241,6 +247,25 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_timed_cache_init() {
+        let cache = ConcurrentTimedCache::<i32, String>::new(Some(4));
+        cache.insert(1, "How".to_string());
+        cache.insert(2, "Hi".to_string());
+        cache.insert(3, "Are".to_string());
+        cache.insert(4, "You".to_string());
+        cache.insert(5, "Doing".to_string());
+        cache.insert(2, "How".to_string());
+
+        assert_eq!(cache.len(), 4);
+
+        assert_eq!(cache.get(&1).clone(), None);
+        assert_eq!(cache.get(&2).as_deref(), Some(&"How".to_string()));
+        assert_eq!(cache.get(&3).as_deref(), Some(&"Are".to_string()));
+        assert_eq!(cache.get(&4).as_deref(), Some(&"You".to_string()));
+        assert_eq!(cache.get(&5).as_deref(), Some(&"Doing".to_string()));
+    }
+
+    #[test]
     fn timed_cache_v2_init() {
         let mut cache = TimedCacheV2::<i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
@@ -257,5 +282,45 @@ mod tests {
         assert_eq!(cache.get(&3).cloned(), Some("Are".to_string()));
         assert_eq!(cache.get(&4).cloned(), Some("You".to_string()));
         assert_eq!(cache.get(&5).cloned(), Some("Doing".to_string()));
+    }
+
+    #[test]
+    fn concurrent_timed_cache_v2_init() {
+        let cache = Arc::new(ConcurrentTimedCacheV2::<i32, String>::new(Some(4)));
+
+        cache.insert(1, "How".to_string());
+        cache.insert(2, "Hi".to_string());
+
+        // await above ones for order
+
+        let mut handles = vec![];
+
+        let cache_clone = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            cache_clone.insert(3, "Are".to_string())
+        }));
+
+        let cache_clone = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            cache_clone.insert(4, "You".to_string())
+        }));
+
+        let cache_clone = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            cache_clone.insert(5, "Doing".to_string())
+        }));
+
+        let cache_clone = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            cache_clone.insert(2, "How".to_string())
+        }));
+
+        assert_eq!(cache.len(), 4);
+
+        assert_eq!(cache.get(&1).clone(), None);
+        assert_eq!(cache.get(&2).as_deref(), Some(&"How".to_string()));
+        assert_eq!(cache.get(&3).as_deref(), Some(&"Are".to_string()));
+        assert_eq!(cache.get(&4).as_deref(), Some(&"You".to_string()));
+        assert_eq!(cache.get(&5).as_deref(), Some(&"Doing".to_string()));
     }
 }
