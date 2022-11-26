@@ -1,4 +1,7 @@
 [workspace]
 members = [
-    "modular-cache"
+    "modular-cache",
+    "cache-benchmarks"
 ]
+
+#exclude = ["cache-benchmarks"]

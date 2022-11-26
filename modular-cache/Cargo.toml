@@ -2,6 +2,12 @@
 name = "modular-cache"
 version = "0.1.0"
 edition = "2021"
+authors = ["sweil <xxx@gmail.com>"]
+description = "A modular cache to plug in compponents in order to customize your cache"
+readme = "README.md"
+repository = "https://github.com/sweil/modular-cache-rs"
+license = "MIT"
+keywords = ["cache", "hashmap"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

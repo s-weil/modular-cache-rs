@@ -28,8 +28,8 @@ impl<K> TimedKey<K> {
 pub struct TimedKeyRegistry<K> {
     /// keys ordered by insertion in ASC order, i.e. latest in front, earliest in back
     ordered_keys: VecDeque<TimedKey<K>>,
-    max_capacity: usize, // TODO: could also maintain a registry of keys for faster lookup of existing keys -> possibly faster insertion but higher memory footprint
-                         // TODO: config - expiration policy, etc
+    max_capacity: usize,
+    // TODO: config - expiration policy, etc
 }
 
 impl<K> GetKey<K> for TimedKeyRegistry<K>
@@ -70,7 +70,6 @@ where
         self.try_remove(&key);
         let timed_key = TimedKey::create_now(key.clone());
         let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-            dbg!("deleting key");
             self.ordered_keys.pop_back()
         } else {
             None
@@ -168,7 +167,6 @@ where
         let timed_key = TimedKey::create_now(key.clone());
 
         let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-            dbg!("deleting key");
             self.ordered_keys.pop_back()
         } else {
             None
