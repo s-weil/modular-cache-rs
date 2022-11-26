@@ -64,7 +64,7 @@ where
     S: KeyRegistry<K> + GetKey<K>,
 {
     /// Get the key's value _without_ updating its statistics.
-    /// Use `get_mut` in case the latter is essential.
+    /// Use `get_mut` in case the latter is of the essence.
     pub fn get(&self, key: &K) -> Option<&V> {
         self.key_registry.get(key).and_then(|k| self.store.get(k))
     }
