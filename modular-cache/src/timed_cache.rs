@@ -125,6 +125,7 @@ where
     K: Hash + Eq + PartialEq + Clone,
 {
     fn update_indices(&mut self) {
+        // TODO: check performance. maybe memory swap below?
         let key_idx_map_udpated = self
             .ordered_keys
             .iter()
