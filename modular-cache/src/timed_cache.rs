@@ -97,7 +97,7 @@ pub type ConcurrentTimedCache<K, V> = ConcurrentCache<K, TimedKeyRegistry<K>, V>
 /// Takes O(1) for finding the keys, but higher memory footprint for having the lookup.
 pub struct TimedKeyRegistry2<K> {
     key_idx_map: HashMap<K, usize>,
-    /// keys ordered by insertion in ASC order, i.e. latest in front, earliest in back
+    /// keys ordered by insertion in DESC order, i.e. latest in back, earliest in front (just as for Vec)
     ordered_keys: VecDeque<TimedKey<K>>,
     max_capacity: usize,
 }
@@ -107,6 +107,7 @@ where
     K: Hash + Eq + PartialEq + Clone,
 {
     fn update_indices(&mut self) {
+        // TODO: if an index was provided, we could just re-index everyhing above/below that idx
         // TODO: check performance. maybe memory swap below?
         let key_idx_map_udpated = self
             .ordered_keys
@@ -115,6 +116,41 @@ where
             .map(|(idx, tk)| (tk.key.clone(), idx))
             .collect();
         self.key_idx_map = key_idx_map_udpated;
+    }
+
+    // dangerous operation
+    fn update_indices_with_shift(&mut self, shift: usize) {
+        for (_, idx) in self.key_idx_map.iter_mut() {
+            let shifted_idx = *idx - shift;
+            *idx = shifted_idx;
+        }
+    }
+
+    fn delete_oldest(&mut self) -> Option<TimedKey<K>> {
+        let first = self.ordered_keys.pop_front();
+        if let Some(k) = &first {
+            self.key_idx_map.remove(&k.key);
+        }
+        self.update_indices_with_shift(1);
+        first
+    }
+
+    fn remove_key(&mut self, key: &K) -> Option<TimedKey<K>> {
+        let key = self
+            .key_idx_map
+            .remove(key)
+            .and_then(|idx| self.ordered_keys.remove(idx));
+        if key.is_some() {
+            self.update_indices();
+        }
+        key
+    }
+
+    fn insert(&mut self, key: K) {
+        let len = self.len();
+        self.key_idx_map.insert(key.clone(), len);
+        let timed_key = TimedKey::create_now(key);
+        self.ordered_keys.push_back(timed_key);
     }
 }
 
@@ -155,39 +191,29 @@ where
     }
 
     fn len(&self) -> usize {
-        // TODO: check also
         if self.key_idx_map.len() != self.ordered_keys.len() {
             panic!("invalid state of key registry");
         }
         self.ordered_keys.len()
     }
 
-    // Takes O(n) in case the key was present and O(1) otherwise.
+    // Takes O(n) in case the key is present, or if storage is full, and O(1) otherwise.
     fn add_or_update(&mut self, key: K) -> Option<K> {
         self.try_remove(&key);
-        let timed_key = TimedKey::create_now(key.clone());
 
-        let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-            self.ordered_keys.pop_back()
+        let deleted_key = if self.len() >= self.max_capacity {
+            self.delete_oldest()
         } else {
             None
         };
-        self.ordered_keys.push_front(timed_key);
-        self.update_indices();
 
+        self.insert(key);
         deleted_key.map(|tk| tk.key)
     }
 
     // Takes O(n) for re-ordering the lookup.
     fn try_remove(&mut self, key: &K) -> Option<K> {
-        // TODO: need to update indices!!!
-        let key = self
-            .key_idx_map
-            .remove(key)
-            .and_then(|idx| self.ordered_keys.remove(idx).map(|tk| tk.key));
-        if key.is_some() {
-            self.update_indices();
-        }
+        let key = self.remove_key(key).map(|tk| tk.key);
         key
     }
 }

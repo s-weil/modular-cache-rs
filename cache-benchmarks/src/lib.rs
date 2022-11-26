@@ -81,10 +81,12 @@ pub fn timed_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, 
         cache.insert(k.clone(), v.clone());
     }
 
+    assert!(cache.len() <= max_capacity);
+
     for (k, v) in key_values.iter() {
         let v_c = cache.get(k);
-        assert!(v_c.is_some());
-        assert_eq!(v_c.unwrap(), v);
+        // assert!(v_c.is_some());
+        // assert_eq!(v_c.unwrap(), v);
     }
 }
 
@@ -96,47 +98,11 @@ pub fn timed_cache_v2_sequential((max_capacity, n_keys, value_len): (usize, usiz
     for (k, v) in key_values.iter() {
         cache.insert(k.clone(), v.clone());
     }
+    assert!(cache.len() <= max_capacity);
 
     for (k, v) in key_values.iter() {
         let v_c = cache.get(k);
-        assert!(v_c.is_some());
-        assert_eq!(v_c.unwrap(), v);
+        // assert!(v_c.is_some());
+        // assert_eq!(v_c.unwrap(), v);
     }
 }
-
-// static ODE_AN_DIE_FREUDE_MAP: HashMap<i64, String> = unsafe {
-//     HashMap::from([
-//         (1, "Freude schöner Götterfunken".to_string()),
-//         (1, "Tochter aus Elysium,".to_string()),
-//         (1, "Wir betreten feuertrunken,".to_string()),
-//         (1, "Himmlische, dein Heiligtum!".to_string()),
-//         (1, "Deine Zauber binden wieder".to_string()),
-//         (1, "Was die Mode streng geteilt;".to_string()),
-//         (1, "Alle Menschen werden Brüder,".to_string()),
-//         (1, "Wo dein sanfter Flügel weilt.".to_string()),
-//         (1, "Freude schöner Götterfunken".to_string()),
-//         (1, "Tochter aus Elysium,".to_string()),
-//         (1, "Wir betreten feuertrunken,".to_string()),
-//         (1, "Himmlische, dein Heiligtum!".to_string()),
-//         (1, "Deine Zauber binden wieder".to_string()),
-//         (1, "Was die Mode streng geteilt;".to_string()),
-//         (1, "Alle Menschen werden Brüder,".to_string()),
-//         (1, "Wo dein sanfter Flügel weilt.".to_string()),
-//         (1, "Freude schöner Götterfunken".to_string()),
-//         (1, "Tochter aus Elysium,".to_string()),
-//         (1, "Wir betreten feuertrunken,".to_string()),
-//         (1, "Himmlische, dein Heiligtum!".to_string()),
-//         (1, "Deine Zauber binden wieder".to_string()),
-//         (1, "Was die Mode streng geteilt;".to_string()),
-//         (1, "Alle Menschen werden Brüder,".to_string()),
-//         (1, "Wo dein sanfter Flügel weilt.".to_string()),
-//         (1, "Freude schöner Götterfunken".to_string()),
-//         (1, "Tochter aus Elysium,".to_string()),
-//         (1, "Wir betreten feuertrunken,".to_string()),
-//         (1, "Himmlische, dein Heiligtum!".to_string()),
-//         (1, "Deine Zauber binden wieder".to_string()),
-//         (1, "Was die Mode streng geteilt;".to_string()),
-//         (1, "Alle Menschen werden Brüder,".to_string()),
-//         (1, "Wo dein sanfter Flügel weilt.".to_string()),
-//     ])
-// };
