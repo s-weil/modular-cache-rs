@@ -1,9 +1,9 @@
 use crate::{
-    cache::{Cache, KeyRegistry},
+    cache::{Cache, GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
 };
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     hash::Hash,
     time::Instant,
 };
@@ -28,8 +28,21 @@ impl<K> TimedKey<K> {
 pub struct TimedKeyRegistry<K> {
     /// keys ordered by insertion in ASC order, i.e. latest in front, earliest in back
     ordered_keys: VecDeque<TimedKey<K>>,
-    max_capacity: usize, // TODO: could also maintain a registry of keys for faster lookup of existing keys -> possibly faster insertion but higher memory footprint
-                         // TODO: config - expiration policy, etc
+    max_capacity: usize,
+    // TODO: config - expiration policy, etc
+}
+
+impl<K> GetKey<K> for TimedKeyRegistry<K>
+where
+    K: PartialEq,
+{
+    /// Takes O(n) for finding the key.
+    fn get(&self, key: &K) -> Option<&K> {
+        self.ordered_keys
+            .iter()
+            .find(|tk| &tk.key == key)
+            .map(|tk| &tk.key)
+    }
 }
 
 impl<K> KeyRegistry<K> for TimedKeyRegistry<K>
@@ -45,33 +58,8 @@ where
         }
     }
 
-    // fn get(&mut self, key: &K) -> Option<&mut TimedKey<K>> {
-    //     for mut tk in self.ordered_keys.iter_mut() {
-    //         if &tk.key == key {
-    //             return Some(&mut tk);
-    //         }
-    //     }
-    //     None
-    // }
-
     fn clear(&mut self) {
         self.ordered_keys.clear();
-    }
-
-    /// Takes O(n) for finding the key.
-    fn get(&self, key: &K) -> Option<&K> {
-        self.ordered_keys
-            .iter()
-            .find(|tk| &tk.key == key)
-            .map(|tk| &tk.key)
-    }
-
-    /// Takes O(n) for finding the key.
-    fn get_mut(&mut self, key: &K) -> Option<&K> {
-        self.ordered_keys
-            .iter()
-            .find(|tk| &tk.key == key)
-            .map(|tk| &tk.key)
     }
 
     fn len(&self) -> usize {
@@ -82,7 +70,6 @@ where
         self.try_remove(&key);
         let timed_key = TimedKey::create_now(key.clone());
         let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-            dbg!("deleting key");
             self.ordered_keys.pop_back()
         } else {
             None
@@ -92,7 +79,7 @@ where
         deleted_key.map(|tk| tk.key)
     }
 
-    // TODO: currently takes o(n) to search for a key. could be improved by a lookup
+    // TODO: currently takes O(n) to search for a key. could be improved by a lookup
     fn try_remove(&mut self, key: &K) -> Option<K> {
         for (idx, tk) in self.ordered_keys.iter().enumerate() {
             if &tk.key == key {
@@ -102,17 +89,12 @@ where
         }
         None
     }
-
-    fn house_keeping(&mut self) -> Option<HashSet<K>> {
-        None
-    }
 }
 
 pub type TimedCache<K, V> = Cache<K, TimedKeyRegistry<K>, V>;
 pub type ConcurrentTimedCache<K, V> = ConcurrentCache<K, TimedKeyRegistry<K>, V>;
 
 /// Takes O(1) for finding the keys, but higher memory footprint for having the lookup.
-#[derive(Debug)]
 pub struct TimedKeyRegistry2<K> {
     key_idx_map: HashMap<K, usize>,
     /// keys ordered by insertion in ASC order, i.e. latest in front, earliest in back
@@ -136,6 +118,23 @@ where
     }
 }
 
+impl<K> GetKey<K> for TimedKeyRegistry2<K>
+where
+    K: Eq + Hash,
+{
+    /// Takes O(1) for finding the key.
+    fn get(&self, key: &K) -> Option<&K> {
+        self.key_idx_map.get(key).map(|&idx| {
+            let tk = &self.ordered_keys[idx].key;
+            if tk == key {
+                tk
+            } else {
+                panic!("invalid state of key registry");
+            }
+        })
+    }
+}
+
 impl<K> KeyRegistry<K> for TimedKeyRegistry2<K>
 where
     K: Hash + Eq + PartialEq + Clone,
@@ -155,28 +154,6 @@ where
         self.ordered_keys.clear();
     }
 
-    fn get(&self, key: &K) -> Option<&K> {
-        self.key_idx_map.get(key).map(|&idx| {
-            let tk = &self.ordered_keys[idx].key;
-            if tk == key {
-                tk
-            } else {
-                panic!("invalid state of key registry");
-            }
-        })
-    }
-
-    fn get_mut(&mut self, key: &K) -> Option<&K> {
-        self.key_idx_map.get(key).map(|&idx| {
-            let tk = &self.ordered_keys[idx].key;
-            if tk == key {
-                tk
-            } else {
-                panic!("invalid state of key registry");
-            }
-        })
-    }
-
     fn len(&self) -> usize {
         // TODO: check also
         if self.key_idx_map.len() != self.ordered_keys.len() {
@@ -191,7 +168,6 @@ where
         let timed_key = TimedKey::create_now(key.clone());
 
         let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-            dbg!("deleting key");
             self.ordered_keys.pop_back()
         } else {
             None
@@ -213,10 +189,6 @@ where
             self.update_indices();
         }
         key
-    }
-
-    fn house_keeping(&mut self) -> Option<HashSet<K>> {
-        None
     }
 }
 
@@ -292,7 +264,7 @@ mod tests {
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
 
-        // await above ones for order
+        // await above ones for correct order
 
         let mut handles = vec![];
 
@@ -315,6 +287,10 @@ mod tests {
         handles.push(std::thread::spawn(move || {
             cache_clone.insert(2, "How".to_string())
         }));
+
+        for h in handles {
+            h.join().unwrap();
+        }
 
         assert_eq!(cache.len(), 4);
 

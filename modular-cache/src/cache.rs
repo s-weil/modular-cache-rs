@@ -1,6 +1,25 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+pub trait GetKey<K>: Sized {
+    /// Gets the key's value _without_ updating its statistics.
+    /// This is crucial for instance for a
+    /// [`LRU cache`](https://en.wikipedia.org/wiki/Cache_replacement_policies#LRU)
+    /// and should be considered to not be implemented in this case.
+    fn get(&self, key: &K) -> Option<&K>;
+}
+
+pub trait GetKeyMut<K>: Sized {
+    // Get the key's value and updates its statistics.
+    fn get(&mut self, key: &K) -> Option<&K>;
+}
+
+pub trait HouseKeeper<K> {
+    /// Make sure keys are still valid; return invalidated ones.
+    fn house_keeping(&mut self) -> Option<HashSet<K>>;
+}
+
+// TODO: split into smaller traits
 pub trait KeyRegistry<K>: Sized {
     // type KeyStatsItem;
 
@@ -19,22 +38,10 @@ pub trait KeyRegistry<K>: Sized {
 
     fn clear(&mut self);
 
-    /// Gets the key's value _without_ updating it's statistics.
-    /// This is crucial for instance for a
-    /// [`LRU cache`](https://en.wikipedia.org/wiki/Cache_replacement_policies#LRU)
-    /// and should be considered to not be implemented in this case.
-    fn get(&self, key: &K) -> Option<&K>;
-    // TODO: rename: 'mut' is misleading
-    // Get the key's value and updates it's statistics.
-    fn get_mut(&mut self, key: &K) -> Option<&K>;
-
     // return deleted key (if some)
     fn add_or_update(&mut self, key: K) -> Option<K>;
 
     fn try_remove(&mut self, key: &K) -> Option<K>;
-
-    /// Make sure keys are still valid; return invalidated ones.
-    fn house_keeping(&mut self) -> Option<HashSet<K>>;
 
     // TODO: invalidate key?
 }
@@ -49,6 +56,29 @@ where
 {
     store: HashMap<K, V>,
     key_registry: R,
+}
+
+impl<K, S, V> Cache<K, S, V>
+where
+    K: Eq + Hash + Clone,
+    S: KeyRegistry<K> + GetKey<K>,
+{
+    /// Get the key's value _without_ updating its statistics.
+    /// Use `get_mut` in case the latter is essential.
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.key_registry.get(key).and_then(|k| self.store.get(k))
+    }
+}
+
+impl<K, S, V> Cache<K, S, V>
+where
+    K: Eq + Hash + Clone,
+    S: KeyRegistry<K> + GetKeyMut<K>,
+{
+    /// Get the key's value and updates its statistics
+    pub fn get_mut(&mut self, key: &K) -> Option<&V> {
+        self.key_registry.get(key).and_then(|k| self.store.get(k))
+    }
 }
 
 impl<K, S, V> Cache<K, S, V>
@@ -80,20 +110,6 @@ where
         self.store.is_empty()
     }
 
-    /// Get the key's value _without_ updating it's statistics.
-    /// Use `get_mut` in case the latter is essential.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.key_registry.get(key).and_then(|k| self.store.get(k))
-    }
-
-    // TODO: rename: 'mut' is misleading
-    /// Get the key's value and updates it's statistics.
-    pub fn get_mut(&mut self, key: &K) -> Option<&V> {
-        self.key_registry
-            .get_mut(key)
-            .and_then(|k| self.store.get(k))
-    }
-
     /// Inserts a key-value pair into the cache.
     /// If the cache did not have this key present, None is returned.
     /// If the cache did have this key present, the value is updated, and the old value is returned.
@@ -107,10 +123,10 @@ where
     }
 
     /// TODO: make sure keys are aligne within registry and store
-    /// Removes a key from the cache, returning the stored key and value if the key was previously in the cache.
-    pub fn remove(&mut self, key: &K) -> Option<(K, V)> {
+    /// Removes a key from the cache, returning the value at the key if the key was previously in the cache.
+    pub fn remove(&mut self, key: &K) -> Option<V> {
         self.key_registry
             .try_remove(key)
-            .and_then(|k| self.store.remove_entry(&k))
+            .and_then(|k| self.store.remove(&k))
     }
 }
