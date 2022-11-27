@@ -6,7 +6,7 @@ use std::sync::Arc;
 use modular_cache::{
     cache::{GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
-    timed_cache::{ConcurrentTimedCache, TimedCache, TimedCacheV2},
+    timed_cache::{ConcurrentTimedCache, ConcurrentTimedCacheV2, TimedCache, TimedCacheV2},
 };
 use rand::Rng;
 
@@ -146,7 +146,7 @@ pub fn timed_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, us
 }
 
 pub fn timed_cache_v2_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
-    let cache = Arc::new(ConcurrentTimedCache::<usize, usize, String>::new(Some(
+    let cache = Arc::new(ConcurrentTimedCacheV2::<usize, usize, String>::new(Some(
         max_capacity,
     )));
 
