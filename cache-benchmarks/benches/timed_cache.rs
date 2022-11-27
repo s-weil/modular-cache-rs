@@ -1,14 +1,14 @@
 use cache_benchmarks::{timed_cache_sequential, timed_cache_v2_sequential};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-// criterion_group!(
-//     benches,
-//     // criterion_timed_cache_v1,
-//     // criterion_timed_cache_v2,
-//     criterion_timed_cache_comparison,
-//     criterion_timed_cache_comparison2
-// );
-// criterion_main!(benches);
+criterion_group!(
+    benches,
+    // criterion_timed_cache_v1,
+    // criterion_timed_cache_v2,
+    criterion_timed_cache_comparison,
+    criterion_timed_cache_comparison2,
+);
+criterion_main!(benches);
 
 pub fn criterion_timed_cache_v1(c: &mut Criterion) {
     let mut group = c.benchmark_group("Evaluate the performance of timed cache implementations");

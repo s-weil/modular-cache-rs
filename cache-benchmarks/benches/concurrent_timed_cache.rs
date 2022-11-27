@@ -1,12 +1,5 @@
 use cache_benchmarks::{timed_cache_parallel, timed_cache_v2_parallel};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-
-// criterion_group!(
-//     concurrent_benches,
-//     criterion_timed_cache_comparison_parallel,
-//     criterion_timed_cache_comparison2_parallel
-// );
-// criterion_main!(concurrent_benches);
+use criterion::{black_box, Criterion};
 
 pub fn criterion_timed_cache_comparison_parallel(c: &mut Criterion) {
     let mut group =

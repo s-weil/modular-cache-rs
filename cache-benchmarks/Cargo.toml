@@ -14,5 +14,6 @@ modular-cache = { path = "../modular-cache" }
 criterion = "0.4.0"
 
 [[bench]]
-name = "timed_cache"
+# name = "timed_cache"
+name = "concurrent_timed_cache"
 harness = false

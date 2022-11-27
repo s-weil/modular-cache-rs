@@ -1,6 +1,5 @@
 // generate data
 extern crate modular_cache;
-use std::hash::Hash;
 
 use std::sync::Arc;
 
