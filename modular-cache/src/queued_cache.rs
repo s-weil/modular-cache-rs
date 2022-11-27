@@ -1,7 +1,7 @@
 use crate::{
     cache::{Cache, GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
-    key::{KeyExtension, TimedKey},
+    key::KeyExtension,
 };
 use std::{
     collections::{HashMap, VecDeque},
@@ -12,7 +12,7 @@ use std::{
 
 /// Takes O(n) for finding the keys.
 #[derive(Debug)]
-pub struct TimedKeyRegistry<KeyExt, K>
+pub struct QueuedRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
 {
@@ -22,7 +22,7 @@ where
     _phantom_data: std::marker::PhantomData<K>, // TODO: config - expiration policy, etc
 }
 
-impl<KeyExt, K> GetKey<K> for TimedKeyRegistry<KeyExt, K>
+impl<KeyExt, K> GetKey<K> for QueuedRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
     K: PartialEq,
@@ -36,13 +36,12 @@ where
     }
 }
 
-impl<KeyExt, K> KeyRegistry<K> for TimedKeyRegistry<KeyExt, K>
+impl<KeyExt, K> KeyRegistry<K> for QueuedRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
 {
     type KeyExtension = KeyExt;
-    // type KeyStatsItem = TimedKey<K>;
 
     fn with_capacity(max_capacity: usize) -> Self {
         Self {
@@ -104,12 +103,12 @@ where
     }
 }
 
-pub type TimedCache<K, KeyExt, V> = Cache<K, TimedKeyRegistry<KeyExt, K>, KeyExt, V>;
-pub type ConcurrentTimedCache<K, KeyExt, V> =
-    ConcurrentCache<K, TimedKeyRegistry<KeyExt, K>, KeyExt, V>;
+pub type QueuedCache<K, KeyExt, V> = Cache<K, QueuedRegistry<KeyExt, K>, KeyExt, V>;
+pub type ConcurrentQueuedCache<K, KeyExt, V> =
+    ConcurrentCache<K, QueuedRegistry<KeyExt, K>, KeyExt, V>;
 
 /// Takes O(1) for finding the keys, but higher memory footprint for having the lookup.
-pub struct TimedKeyRegistry2<KeyExt, K>
+pub struct QueuedLookupRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
 {
@@ -120,7 +119,7 @@ where
     _phantom_data: std::marker::PhantomData<K>,
 }
 
-impl<KeyExt, K> TimedKeyRegistry2<KeyExt, K>
+impl<KeyExt, K> QueuedLookupRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
@@ -173,7 +172,7 @@ where
     }
 }
 
-impl<KeyExt, K> GetKey<K> for TimedKeyRegistry2<KeyExt, K>
+impl<KeyExt, K> GetKey<K> for QueuedLookupRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
     K: Eq + Hash,
@@ -191,7 +190,7 @@ where
     }
 }
 
-impl<KeyExt, K> KeyRegistry<K> for TimedKeyRegistry2<KeyExt, K>
+impl<KeyExt, K> KeyRegistry<K> for QueuedLookupRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
@@ -253,9 +252,9 @@ where
     }
 }
 
-pub type TimedCacheV2<K, KeyExt, V> = Cache<K, TimedKeyRegistry2<KeyExt, K>, KeyExt, V>;
-pub type ConcurrentTimedCacheV2<K, KeyExt, V> =
-    ConcurrentCache<K, TimedKeyRegistry2<KeyExt, K>, KeyExt, V>;
+pub type QueuedLookupCache<K, KeyExt, V> = Cache<K, QueuedLookupRegistry<KeyExt, K>, KeyExt, V>;
+pub type ConcurrentQueuedLookupCache<K, KeyExt, V> =
+    ConcurrentCache<K, QueuedLookupRegistry<KeyExt, K>, KeyExt, V>;
 
 #[cfg(test)]
 mod tests {
@@ -263,8 +262,8 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn timed_cache_init() {
-        let mut cache = TimedCache::<i32, i32, String>::new(Some(4));
+    fn queued_cache_init() {
+        let mut cache = QueuedCache::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -282,8 +281,8 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_timed_cache_init() {
-        let cache = ConcurrentTimedCache::<i32, i32, String>::new(Some(4));
+    fn concurrent_queued_cache_init() {
+        let cache = ConcurrentQueuedCache::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -301,8 +300,8 @@ mod tests {
     }
 
     #[test]
-    fn timed_cache_v2_init() {
-        let mut cache = TimedCacheV2::<i32, i32, String>::new(Some(4));
+    fn queued_lookup_cache_init() {
+        let mut cache = QueuedLookupCache::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -320,8 +319,10 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_timed_cache_v2_init() {
-        let cache = Arc::new(ConcurrentTimedCacheV2::<i32, i32, String>::new(Some(4)));
+    fn concurrent_queued_lookup_cache_init() {
+        let cache = Arc::new(ConcurrentQueuedLookupCache::<i32, i32, String>::new(Some(
+            4,
+        )));
 
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());

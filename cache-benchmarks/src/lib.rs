@@ -6,45 +6,47 @@ use std::sync::Arc;
 use modular_cache::{
     cache::{GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
-    timed_cache::{ConcurrentTimedCache, ConcurrentTimedCacheV2, TimedCache, TimedCacheV2},
+    queued_cache::{
+        ConcurrentQueuedCache, ConcurrentQueuedLookupCache, QueuedCache, QueuedLookupCache,
+    },
 };
-use rand::Rng;
+// use rand::Rng;
 
-// Poem by Friedrich Schiller. The corresponding music is the European Anthem.
-const ODE_AN_DIE_FREUDE: [&str; 32] = [
-    "Freude schöner Götterfunken",
-    "Tochter aus Elysium,",
-    "Wir betreten feuertrunken,",
-    "Himmlische, dein Heiligtum!",
-    "Deine Zauber binden wieder",
-    "Was die Mode streng geteilt;",
-    "Alle Menschen werden Brüder,",
-    "Wo dein sanfter Flügel weilt.",
-    "Freude schöner Götterfunken",
-    "Tochter aus Elysium,",
-    "Wir betreten feuertrunken,",
-    "Himmlische, dein Heiligtum!",
-    "Deine Zauber binden wieder",
-    "Was die Mode streng geteilt;",
-    "Alle Menschen werden Brüder,",
-    "Wo dein sanfter Flügel weilt.",
-    "Freude schöner Götterfunken",
-    "Tochter aus Elysium,",
-    "Wir betreten feuertrunken,",
-    "Himmlische, dein Heiligtum!",
-    "Deine Zauber binden wieder",
-    "Was die Mode streng geteilt;",
-    "Alle Menschen werden Brüder,",
-    "Wo dein sanfter Flügel weilt.",
-    "Freude schöner Götterfunken",
-    "Tochter aus Elysium,",
-    "Wir betreten feuertrunken,",
-    "Himmlische, dein Heiligtum!",
-    "Deine Zauber binden wieder",
-    "Was die Mode streng geteilt;",
-    "Alle Menschen werden Brüder,",
-    "Wo dein sanfter Flügel weilt.",
-];
+// // Poem by Friedrich Schiller. The corresponding music is the European Anthem.
+// const ODE_AN_DIE_FREUDE: [&str; 32] = [
+//     "Freude schöner Götterfunken",
+//     "Tochter aus Elysium,",
+//     "Wir betreten feuertrunken,",
+//     "Himmlische, dein Heiligtum!",
+//     "Deine Zauber binden wieder",
+//     "Was die Mode streng geteilt;",
+//     "Alle Menschen werden Brüder,",
+//     "Wo dein sanfter Flügel weilt.",
+//     "Freude schöner Götterfunken",
+//     "Tochter aus Elysium,",
+//     "Wir betreten feuertrunken,",
+//     "Himmlische, dein Heiligtum!",
+//     "Deine Zauber binden wieder",
+//     "Was die Mode streng geteilt;",
+//     "Alle Menschen werden Brüder,",
+//     "Wo dein sanfter Flügel weilt.",
+//     "Freude schöner Götterfunken",
+//     "Tochter aus Elysium,",
+//     "Wir betreten feuertrunken,",
+//     "Himmlische, dein Heiligtum!",
+//     "Deine Zauber binden wieder",
+//     "Was die Mode streng geteilt;",
+//     "Alle Menschen werden Brüder,",
+//     "Wo dein sanfter Flügel weilt.",
+//     "Freude schöner Götterfunken",
+//     "Tochter aus Elysium,",
+//     "Wir betreten feuertrunken,",
+//     "Himmlische, dein Heiligtum!",
+//     "Deine Zauber binden wieder",
+//     "Was die Mode streng geteilt;",
+//     "Alle Menschen werden Brüder,",
+//     "Wo dein sanfter Flügel weilt.",
+// ];
 
 fn create_value(value_len: usize) -> String {
     let v = vec!["a"; value_len];
@@ -80,10 +82,10 @@ pub(crate) fn gernerate_key_values(n_keys: usize, value_len: usize) -> Vec<(usiz
     key_values
 }
 
-pub fn timed_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+pub fn queued_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let key_values = gernerate_key_values(n_keys, value_len);
 
-    let mut cache = TimedCache::<usize, usize, String>::new(Some(max_capacity));
+    let mut cache = QueuedCache::<usize, usize, String>::new(Some(max_capacity));
 
     for (k, v) in key_values.iter() {
         cache.insert(k.clone(), v.clone());
@@ -96,10 +98,10 @@ pub fn timed_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, 
     }
 }
 
-pub fn timed_cache_v2_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+pub fn queued_lookup_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let key_values = gernerate_key_values(n_keys, value_len);
 
-    let mut cache = TimedCacheV2::<usize, usize, String>::new(Some(max_capacity));
+    let mut cache = QueuedLookupCache::<usize, usize, String>::new(Some(max_capacity));
 
     for (k, v) in key_values.iter() {
         cache.insert(k.clone(), v.clone());
@@ -129,8 +131,8 @@ fn insert_and_get<R>(
     }
 }
 
-pub fn timed_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
-    let cache = Arc::new(ConcurrentTimedCache::<usize, usize, String>::new(Some(
+pub fn queued_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+    let cache = Arc::new(ConcurrentQueuedCache::<usize, usize, String>::new(Some(
         max_capacity,
     )));
 
@@ -145,10 +147,10 @@ pub fn timed_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, us
     assert!(cache.len() <= max_capacity);
 }
 
-pub fn timed_cache_v2_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
-    let cache = Arc::new(ConcurrentTimedCacheV2::<usize, usize, String>::new(Some(
-        max_capacity,
-    )));
+pub fn queued_lookup_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+    let cache = Arc::new(ConcurrentQueuedLookupCache::<usize, usize, String>::new(
+        Some(max_capacity),
+    ));
 
     let mut handles = Vec::new();
     for _ in 0..4 {

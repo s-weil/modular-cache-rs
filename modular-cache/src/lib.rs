@@ -1,10 +1,11 @@
 pub mod cache;
 pub mod concurrent_cache;
 pub mod key;
-pub mod timed_cache;
+pub mod queued_cache;
 
 /*
 TODO:
+    - split key registry in smaller pieces and try to simplify signature of cache wrt number of generics
     - expiration policies
     - lru impplementation
     - simplest keyregistry with hashmap! -> doesnt make sense
