@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+use crate::key::KeyExtension;
+
 pub trait GetKey<K>: Sized {
     /// Gets the key's value _without_ updating its statistics.
     /// This is crucial for instance for a
@@ -21,7 +23,8 @@ pub trait HouseKeeper<K> {
 
 // TODO: split into smaller traits
 pub trait KeyRegistry<K>: Sized {
-    // type KeyStatsItem;
+    // type Key;
+    type KeyExtension: KeyExtension<K>; //Self::Key>;
 
     fn with_capacity(max_capacity: usize) -> Self;
 
@@ -39,29 +42,27 @@ pub trait KeyRegistry<K>: Sized {
     fn clear(&mut self);
 
     // return deleted key (if some)
-    fn add_or_update(&mut self, key: K) -> Option<K>;
+    fn add_or_update(&mut self, key: Self::KeyExtension) -> Option<K>;
 
     fn try_remove(&mut self, key: &K) -> Option<K>;
-
-    // TODO: invalidate key?
 }
 
 // TODO: could also have a trait for cache and then inject LRU, etc
 // TODO: generalize with randomstate and buildhasher
 // TODO: stats (instant) within `orderd_keys`?
-pub struct Cache<K, R, V>
+pub struct Cache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash,
-    R: KeyRegistry<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt>,
 {
     store: HashMap<K, V>,
-    key_registry: R,
+    key_registry: KeyReg,
 }
 
-impl<K, S, V> Cache<K, S, V>
+impl<K, KeyReg, KeyExt, V> Cache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K> + GetKey<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt> + GetKey<K>,
 {
     /// Get the key's value _without_ updating its statistics.
     /// Use `get_mut` in case the latter is of the essence.
@@ -70,10 +71,10 @@ where
     }
 }
 
-impl<K, S, V> Cache<K, S, V>
+impl<K, KeyReg, KeyExt, V> Cache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K> + GetKeyMut<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt> + GetKeyMut<K>,
 {
     /// Get the key's value and updates its statistics
     pub fn get_mut(&mut self, key: &K) -> Option<&V> {
@@ -81,15 +82,16 @@ where
     }
 }
 
-impl<K, S, V> Cache<K, S, V>
+impl<K, KeyReg, KeyExt, V> Cache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt>,
+    KeyExt: KeyExtension<K>,
 {
     pub fn new(max_capacity: Option<usize>) -> Self {
         Self {
             store: HashMap::new(),
-            key_registry: S::init(max_capacity),
+            key_registry: KeyReg::init(max_capacity),
         }
     }
 
@@ -115,11 +117,14 @@ where
     /// If the cache did have this key present, the value is updated, and the old value is returned.
     /// TODO: remove or keep? The key is not updated, though; this matters for types that can be == without being identical.
     /// See the module-level documentation for more.
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    pub fn insert(&mut self, key: KeyExt, value: V) -> Option<V>
+    where
+        KeyExt: Clone,
+    {
         if let Some(deleted_key) = self.key_registry.add_or_update(key.clone()) {
             self.store.remove(&deleted_key);
         }
-        self.store.insert(key, value)
+        self.store.insert(key.key().clone(), value)
     }
 
     /// TODO: make sure keys are aligne within registry and store

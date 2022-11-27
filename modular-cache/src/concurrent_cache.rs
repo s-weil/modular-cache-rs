@@ -1,4 +1,7 @@
-use crate::cache::{Cache, GetKey, GetKeyMut, KeyRegistry};
+use crate::{
+    cache::{Cache, GetKey, GetKeyMut, KeyRegistry},
+    key::KeyExtension,
+};
 use std::{
     hash::Hash,
     sync::{Arc, RwLock},
@@ -7,18 +10,18 @@ use std::{
 // TODO: use different concurrent primitives via features
 
 // config(no(parking-lot), no(tokio))
-pub struct ConcurrentCache<K, R, V>
+pub struct ConcurrentCache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash,
-    R: KeyRegistry<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt>,
 {
-    inner: RwLock<Cache<K, R, Arc<V>>>,
+    inner: RwLock<Cache<K, KeyReg, KeyExt, Arc<V>>>,
 }
 
-impl<K, S, V> ConcurrentCache<K, S, V>
+impl<K, KeyReg, KeyExt, V> ConcurrentCache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K> + GetKey<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt> + GetKey<K>,
 {
     /// Get the key's value _without_ updating its statistics.
     /// Use `get_mut` in case the latter is essential.
@@ -28,10 +31,10 @@ where
     }
 }
 
-impl<K, S, V> ConcurrentCache<K, S, V>
+impl<K, KeyReg, KeyExt, V> ConcurrentCache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K> + GetKeyMut<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt> + GetKeyMut<K>,
 {
     // TODO: rename: 'mut' is misleading
     /// Gets the key's value and updates its statistics. Locks this cache, blocking the current thread until it can be acquired.
@@ -41,10 +44,11 @@ where
     }
 }
 
-impl<K, S, V> ConcurrentCache<K, S, V>
+impl<K, KeyReg, KeyExt, V> ConcurrentCache<K, KeyReg, KeyExt, V>
 where
     K: Eq + Hash + Clone,
-    S: KeyRegistry<K>,
+    KeyReg: KeyRegistry<K, KeyExtension = KeyExt>,
+    KeyExt: KeyExtension<K> + Clone,
 {
     pub fn new(max_capacity: Option<usize>) -> Self {
         Self {
@@ -67,7 +71,7 @@ where
         guard.clear()
     }
 
-    pub fn insert(&self, key: K, value: V) -> Option<Arc<V>> {
+    pub fn insert(&self, key: KeyExt, value: V) -> Option<Arc<V>> {
         let mut guard = self.inner.write().unwrap();
         guard.insert(key, Arc::new(value))
     }

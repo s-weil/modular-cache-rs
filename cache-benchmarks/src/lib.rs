@@ -1,7 +1,14 @@
 // generate data
 extern crate modular_cache;
+use std::hash::Hash;
 
-use modular_cache::timed_cache::{TimedCache, TimedCacheV2};
+use std::sync::Arc;
+
+use modular_cache::{
+    cache::{GetKey, KeyRegistry},
+    concurrent_cache::ConcurrentCache,
+    timed_cache::{ConcurrentTimedCache, TimedCache, TimedCacheV2},
+};
 use rand::Rng;
 
 // Poem by Friedrich Schiller. The corresponding music is the European Anthem.
@@ -60,6 +67,8 @@ fn create_value(value_len: usize) -> String {
 //     key_values
 // }
 
+// TODO: randomize access / shuffle key_values after inserted
+
 pub(crate) fn gernerate_key_values(n_keys: usize, value_len: usize) -> Vec<(usize, String)> {
     let mut key_values = Vec::with_capacity(n_keys);
 
@@ -75,7 +84,7 @@ pub(crate) fn gernerate_key_values(n_keys: usize, value_len: usize) -> Vec<(usiz
 pub fn timed_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let key_values = gernerate_key_values(n_keys, value_len);
 
-    let mut cache = TimedCache::<usize, String>::new(Some(max_capacity));
+    let mut cache = TimedCache::<usize, usize, String>::new(Some(max_capacity));
 
     for (k, v) in key_values.iter() {
         cache.insert(k.clone(), v.clone());
@@ -83,26 +92,76 @@ pub fn timed_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, 
 
     assert!(cache.len() <= max_capacity);
 
-    for (k, v) in key_values.iter() {
-        let v_c = cache.get(k);
-        // assert!(v_c.is_some());
-        // assert_eq!(v_c.unwrap(), v);
+    for (k, _) in key_values.iter() {
+        let _ = cache.get(k);
     }
 }
 
 pub fn timed_cache_v2_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let key_values = gernerate_key_values(n_keys, value_len);
 
-    let mut cache = TimedCacheV2::<usize, String>::new(Some(max_capacity));
+    let mut cache = TimedCacheV2::<usize, usize, String>::new(Some(max_capacity));
 
     for (k, v) in key_values.iter() {
         cache.insert(k.clone(), v.clone());
     }
     assert!(cache.len() <= max_capacity);
 
-    for (k, v) in key_values.iter() {
-        let v_c = cache.get(k);
-        // assert!(v_c.is_some());
-        // assert_eq!(v_c.unwrap(), v);
+    for (k, _) in key_values.iter() {
+        let _ = cache.get(k);
     }
+}
+
+fn insert_and_get<R>(
+    cache: Arc<ConcurrentCache<usize, R, usize, String>>,
+    n_keys: usize,
+    value_len: usize,
+) where
+    R: KeyRegistry<usize, KeyExtension = usize> + GetKey<usize>,
+{
+    let key_values = gernerate_key_values(n_keys, value_len);
+
+    for (k, v) in key_values.iter() {
+        cache.insert(k.clone(), v.clone());
+    }
+
+    for (k, _) in key_values.iter() {
+        let _ = cache.get(k);
+    }
+}
+
+pub fn timed_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+    let cache = Arc::new(ConcurrentTimedCache::<usize, usize, String>::new(Some(
+        max_capacity,
+    )));
+
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let thread_cache = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            insert_and_get(thread_cache, n_keys, value_len)
+        }));
+    }
+
+    assert!(cache.len() <= max_capacity);
+}
+
+pub fn timed_cache_v2_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
+    let cache = Arc::new(ConcurrentTimedCache::<usize, usize, String>::new(Some(
+        max_capacity,
+    )));
+
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let thread_cache = cache.clone();
+        handles.push(std::thread::spawn(move || {
+            insert_and_get(thread_cache, n_keys, value_len)
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+
+    assert!(cache.len() <= max_capacity);
 }

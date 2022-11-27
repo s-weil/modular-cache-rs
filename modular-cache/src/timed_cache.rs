@@ -1,60 +1,54 @@
 use crate::{
     cache::{Cache, GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
+    key::{KeyExtension, TimedKey},
 };
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
-    time::Instant,
 };
 
-#[derive(Clone, Debug)]
-pub struct TimedKey<K> {
-    key: K,
-    instant: Instant,
-}
-
-impl<K> TimedKey<K> {
-    fn create_now(key: K) -> Self {
-        Self {
-            key,
-            instant: Instant::now(),
-        }
-    }
-}
+// TODO: rename to FiFo / Queued
 
 /// Takes O(n) for finding the keys.
 #[derive(Debug)]
-pub struct TimedKeyRegistry<K> {
+pub struct TimedKeyRegistry<KeyExt, K>
+where
+    KeyExt: KeyExtension<K>,
+{
     /// keys ordered by insertion in ASC order, i.e. latest in front, earliest in back
-    ordered_keys: VecDeque<TimedKey<K>>,
+    ordered_keys: VecDeque<KeyExt>,
     max_capacity: usize,
-    // TODO: config - expiration policy, etc
+    _phantom_data: std::marker::PhantomData<K>, // TODO: config - expiration policy, etc
 }
 
-impl<K> GetKey<K> for TimedKeyRegistry<K>
+impl<KeyExt, K> GetKey<K> for TimedKeyRegistry<KeyExt, K>
 where
+    KeyExt: KeyExtension<K>,
     K: PartialEq,
 {
     /// Takes O(n) for finding the key.
     fn get(&self, key: &K) -> Option<&K> {
         self.ordered_keys
             .iter()
-            .find(|tk| &tk.key == key)
-            .map(|tk| &tk.key)
+            .find(|tk| tk.key() == key)
+            .map(|tk| tk.key())
     }
 }
 
-impl<K> KeyRegistry<K> for TimedKeyRegistry<K>
+impl<KeyExt, K> KeyRegistry<K> for TimedKeyRegistry<KeyExt, K>
 where
+    KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
 {
+    type KeyExtension = KeyExt;
     // type KeyStatsItem = TimedKey<K>;
 
     fn with_capacity(max_capacity: usize) -> Self {
         Self {
             ordered_keys: VecDeque::with_capacity(max_capacity),
             max_capacity,
+            _phantom_data: std::marker::PhantomData::<K>,
         }
     }
 
@@ -66,44 +60,69 @@ where
         self.ordered_keys.len()
     }
 
-    fn add_or_update(&mut self, key: K) -> Option<K> {
-        self.try_remove(&key);
-        let timed_key = TimedKey::create_now(key.clone());
+    fn add_or_update(&mut self, key: Self::KeyExtension) -> Option<K> {
+        self.try_remove(key.key());
+        // let timed_key = TimedKey::create_now(key.key().clone());
         let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
             self.ordered_keys.pop_back()
         } else {
             None
         };
-        self.ordered_keys.push_front(timed_key);
+        self.ordered_keys.push_front(key);
 
-        deleted_key.map(|tk| tk.key)
+        deleted_key.map(|tk| tk.key().clone())
     }
+    // fn add_or_update(&mut self, key: K) -> Option<K> {
+    //     self.try_remove(&key);
+    //     let timed_key = TimedKey::create_now(key.clone());
+    //     let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
+    //         self.ordered_keys.pop_back()
+    //     } else {
+    //         None
+    //     };
+    //     self.ordered_keys.push_front(timed_key);
+
+    //     deleted_key.map(|tk| tk.key().clone())
+    // }
 
     // TODO: currently takes O(n) to search for a key. could be improved by a lookup
     fn try_remove(&mut self, key: &K) -> Option<K> {
+        let mut find_index = None;
+
         for (idx, tk) in self.ordered_keys.iter().enumerate() {
-            if &tk.key == key {
-                self.ordered_keys.remove(idx);
-                return Some(key.clone());
+            if &tk.key() == &key {
+                find_index = Some(idx);
+                break;
             }
+        }
+
+        if let Some(idx) = find_index {
+            self.ordered_keys.remove(idx);
+            return Some(key.clone());
         }
         None
     }
 }
 
-pub type TimedCache<K, V> = Cache<K, TimedKeyRegistry<K>, V>;
-pub type ConcurrentTimedCache<K, V> = ConcurrentCache<K, TimedKeyRegistry<K>, V>;
+pub type TimedCache<K, KeyExt, V> = Cache<K, TimedKeyRegistry<KeyExt, K>, KeyExt, V>;
+pub type ConcurrentTimedCache<K, KeyExt, V> =
+    ConcurrentCache<K, TimedKeyRegistry<KeyExt, K>, KeyExt, V>;
 
 /// Takes O(1) for finding the keys, but higher memory footprint for having the lookup.
-pub struct TimedKeyRegistry2<K> {
+pub struct TimedKeyRegistry2<KeyExt, K>
+where
+    KeyExt: KeyExtension<K>,
+{
     key_idx_map: HashMap<K, usize>,
     /// keys ordered by insertion in DESC order, i.e. latest in back, earliest in front (just as for Vec)
-    ordered_keys: VecDeque<TimedKey<K>>,
+    ordered_keys: VecDeque<KeyExt>,
     max_capacity: usize,
+    _phantom_data: std::marker::PhantomData<K>,
 }
 
-impl<K> TimedKeyRegistry2<K>
+impl<KeyExt, K> TimedKeyRegistry2<KeyExt, K>
 where
+    KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
 {
     fn update_indices(&mut self) {
@@ -113,7 +132,7 @@ where
             .ordered_keys
             .iter()
             .enumerate()
-            .map(|(idx, tk)| (tk.key.clone(), idx))
+            .map(|(idx, tk)| (tk.key().clone(), idx))
             .collect();
         self.key_idx_map = key_idx_map_udpated;
     }
@@ -126,16 +145,16 @@ where
         }
     }
 
-    fn delete_oldest(&mut self) -> Option<TimedKey<K>> {
+    fn delete_oldest(&mut self) -> Option<KeyExt> {
         let first = self.ordered_keys.pop_front();
         if let Some(k) = &first {
-            self.key_idx_map.remove(&k.key);
+            self.key_idx_map.remove(&k.key().clone());
         }
         self.update_indices_with_shift(1);
         first
     }
 
-    fn remove_key(&mut self, key: &K) -> Option<TimedKey<K>> {
+    fn remove_key(&mut self, key: &K) -> Option<KeyExt> {
         let key = self
             .key_idx_map
             .remove(key)
@@ -146,22 +165,23 @@ where
         key
     }
 
-    fn insert(&mut self, key: K) {
+    fn insert(&mut self, key: KeyExt) {
         let len = self.len();
-        self.key_idx_map.insert(key.clone(), len);
-        let timed_key = TimedKey::create_now(key);
-        self.ordered_keys.push_back(timed_key);
+        self.key_idx_map.insert(key.key().clone(), len);
+        // let timed_key = TimedKey::create_now(key);
+        self.ordered_keys.push_back(key);
     }
 }
 
-impl<K> GetKey<K> for TimedKeyRegistry2<K>
+impl<KeyExt, K> GetKey<K> for TimedKeyRegistry2<KeyExt, K>
 where
+    KeyExt: KeyExtension<K>,
     K: Eq + Hash,
 {
     /// Takes O(1) for finding the key.
     fn get(&self, key: &K) -> Option<&K> {
         self.key_idx_map.get(key).map(|&idx| {
-            let tk = &self.ordered_keys[idx].key;
+            let tk = self.ordered_keys[idx].key();
             if tk == key {
                 tk
             } else {
@@ -171,17 +191,19 @@ where
     }
 }
 
-impl<K> KeyRegistry<K> for TimedKeyRegistry2<K>
+impl<KeyExt, K> KeyRegistry<K> for TimedKeyRegistry2<KeyExt, K>
 where
+    KeyExt: KeyExtension<K>,
     K: Hash + Eq + PartialEq + Clone,
 {
-    // type KeyStatsItem = TimedKey<K>;
+    type KeyExtension = KeyExt;
 
     fn with_capacity(max_capacity: usize) -> Self {
         Self {
             key_idx_map: HashMap::with_capacity(max_capacity),
             ordered_keys: VecDeque::with_capacity(max_capacity),
             max_capacity,
+            _phantom_data: std::marker::PhantomData::<K>,
         }
     }
 
@@ -198,8 +220,8 @@ where
     }
 
     // Takes O(n) in case the key is present, or if storage is full, and O(1) otherwise.
-    fn add_or_update(&mut self, key: K) -> Option<K> {
-        self.try_remove(&key);
+    fn add_or_update(&mut self, key: KeyExt) -> Option<K> {
+        self.try_remove(key.key());
 
         let deleted_key = if self.len() >= self.max_capacity {
             self.delete_oldest()
@@ -208,18 +230,32 @@ where
         };
 
         self.insert(key);
-        deleted_key.map(|tk| tk.key)
+        deleted_key.map(|tk| tk.key().clone())
     }
+    // // Takes O(n) in case the key is present, or if storage is full, and O(1) otherwise.
+    // fn add_or_update(&mut self, key: K) -> Option<K> {
+    //     self.try_remove(&key);
+
+    //     let deleted_key = if self.len() >= self.max_capacity {
+    //         self.delete_oldest()
+    //     } else {
+    //         None
+    //     };
+
+    //     self.insert(key);
+    //     deleted_key.map(|tk| tk.key)
+    // }
 
     // Takes O(n) for re-ordering the lookup.
     fn try_remove(&mut self, key: &K) -> Option<K> {
-        let key = self.remove_key(key).map(|tk| tk.key);
+        let key = self.remove_key(key).map(|tk| tk.key().clone());
         key
     }
 }
 
-pub type TimedCacheV2<K, V> = Cache<K, TimedKeyRegistry2<K>, V>;
-pub type ConcurrentTimedCacheV2<K, V> = ConcurrentCache<K, TimedKeyRegistry2<K>, V>;
+pub type TimedCacheV2<K, KeyExt, V> = Cache<K, TimedKeyRegistry2<KeyExt, K>, KeyExt, V>;
+pub type ConcurrentTimedCacheV2<K, KeyExt, V> =
+    ConcurrentCache<K, TimedKeyRegistry2<KeyExt, K>, KeyExt, V>;
 
 #[cfg(test)]
 mod tests {
@@ -228,7 +264,7 @@ mod tests {
 
     #[test]
     fn timed_cache_init() {
-        let mut cache = TimedCache::<i32, String>::new(Some(4));
+        let mut cache = TimedCache::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -247,7 +283,7 @@ mod tests {
 
     #[test]
     fn concurrent_timed_cache_init() {
-        let cache = ConcurrentTimedCache::<i32, String>::new(Some(4));
+        let cache = ConcurrentTimedCache::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -266,7 +302,7 @@ mod tests {
 
     #[test]
     fn timed_cache_v2_init() {
-        let mut cache = TimedCacheV2::<i32, String>::new(Some(4));
+        let mut cache = TimedCacheV2::<i32, i32, String>::new(Some(4));
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
         cache.insert(3, "Are".to_string());
@@ -285,7 +321,7 @@ mod tests {
 
     #[test]
     fn concurrent_timed_cache_v2_init() {
-        let cache = Arc::new(ConcurrentTimedCacheV2::<i32, String>::new(Some(4)));
+        let cache = Arc::new(ConcurrentTimedCacheV2::<i32, i32, String>::new(Some(4)));
 
         cache.insert(1, "How".to_string());
         cache.insert(2, "Hi".to_string());
