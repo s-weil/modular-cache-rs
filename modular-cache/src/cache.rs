@@ -21,6 +21,16 @@ pub trait HouseKeeper<K> {
     fn house_keeping(&mut self) -> Option<HashSet<K>>;
 }
 
+pub trait KeyPolicy<K> {
+    type KeyExtension: KeyExtension<K>;
+
+    fn add(&mut self, key: Self::KeyExtension) -> Option<K>;
+
+    fn add_or_update(&mut self, key: Self::KeyExtension) -> Option<K>;
+
+    fn try_remove(&mut self, key: &K) -> Option<K>;
+}
+
 // TODO: split into smaller traits
 pub trait KeyRegistry<K>: Sized {
     // type Key;

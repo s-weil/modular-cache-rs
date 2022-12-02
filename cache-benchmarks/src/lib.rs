@@ -4,7 +4,7 @@ extern crate modular_cache;
 use std::sync::Arc;
 
 use modular_cache::{
-    cache::{GetKey, KeyRegistry},
+    cache::{Cache, GetKey, KeyRegistry},
     concurrent_cache::ConcurrentCache,
     queued_cache::{
         ConcurrentQueuedCache, ConcurrentQueuedLookupCache, QueuedCache, QueuedLookupCache,
@@ -80,6 +80,28 @@ pub(crate) fn gernerate_key_values(n_keys: usize, value_len: usize) -> Vec<(usiz
     }
 
     key_values
+}
+
+fn insert_and_get_seq<R>(
+    cache: &mut Cache<usize, R, usize, String>,
+    n_keys: usize,
+    value_len: usize,
+) where
+    R: KeyRegistry<usize, KeyExtension = usize> + GetKey<usize>,
+{
+    let key_values = gernerate_key_values(n_keys, value_len);
+
+    for (k, v) in key_values.iter() {
+        cache.insert(k.clone(), v.clone());
+    }
+
+    let mut rng = rand::thread_rng();
+    for _ in 0..n_keys {
+        let rd_idx = rng.gen_range(0..n_keys);
+        let key = key_values[y]
+    } (k, _) in key_values.iter() {
+        let _ = cache.get(k);
+    }
 }
 
 pub fn queued_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
