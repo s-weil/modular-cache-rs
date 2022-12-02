@@ -106,37 +106,14 @@ fn insert_and_get_seq<R>(
 
 pub fn queued_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let mut cache = QueuedCache::<usize, usize, String>::new(Some(max_capacity));
-
     insert_and_get_seq(&mut cache, n_keys, value_len);
     assert!(cache.len() <= max_capacity);
-
-    // let key_values = gernerate_key_values(n_keys, value_len);
-
-    // for (k, v) in key_values.iter() {
-    //     cache.insert(k.clone(), v.clone());
-    // }
-
-    // for (k, _) in key_values.iter() {
-    //     let _ = cache.get(k);
-    // }
 }
 
 pub fn queued_lookup_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
     let mut cache = QueuedLookupCache::<usize, usize, String>::new(Some(max_capacity));
-
     insert_and_get_seq(&mut cache, n_keys, value_len);
     assert!(cache.len() <= max_capacity);
-
-    // let key_values = gernerate_key_values(n_keys, value_len);
-
-    // for (k, v) in key_values.iter() {
-    //     cache.insert(k.clone(), v.clone());
-    // }
-    // assert!(cache.len() <= max_capacity);
-
-    // for (k, _) in key_values.iter() {
-    //     let _ = cache.get(k);
-    // }
 }
 
 fn insert_and_get_concurrent<R>(
@@ -158,9 +135,6 @@ fn insert_and_get_concurrent<R>(
         let (key, _) = key_values[rd_idx];
         let _ = cache.get(&key);
     }
-    // for (k, _) in key_values.iter() {
-    //     let _ = cache.get(k);
-    // }
 }
 
 pub fn queued_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
@@ -169,7 +143,7 @@ pub fn queued_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, u
     )));
 
     let mut handles = Vec::new();
-    for _ in 0..4 {
+    for _ in 0..2 {
         let thread_cache = cache.clone();
         handles.push(std::thread::spawn(move || {
             insert_and_get_concurrent(thread_cache, n_keys, value_len)
@@ -185,7 +159,7 @@ pub fn queued_lookup_cache_parallel((max_capacity, n_keys, value_len): (usize, u
     ));
 
     let mut handles = Vec::new();
-    for _ in 0..4 {
+    for _ in 0..2 {
         let thread_cache = cache.clone();
         handles.push(std::thread::spawn(move || {
             insert_and_get_concurrent(thread_cache, n_keys, value_len)

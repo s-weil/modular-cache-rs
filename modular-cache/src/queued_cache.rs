@@ -8,7 +8,7 @@ use std::{
     hash::Hash,
 };
 
-// TODO: rename to FiFo / Queued
+// TODO: rename to FiFo?
 
 /// Takes O(n) for finding the keys.
 #[derive(Debug)]
@@ -71,18 +71,6 @@ where
 
         deleted_key.map(|tk| tk.key().clone())
     }
-    // fn add_or_update(&mut self, key: K) -> Option<K> {
-    //     self.try_remove(&key);
-    //     let timed_key = TimedKey::create_now(key.clone());
-    //     let deleted_key = if self.ordered_keys.len() >= self.max_capacity {
-    //         self.ordered_keys.pop_back()
-    //     } else {
-    //         None
-    //     };
-    //     self.ordered_keys.push_front(timed_key);
-
-    //     deleted_key.map(|tk| tk.key().clone())
-    // }
 
     // TODO: currently takes O(n) to search for a key. could be improved by a lookup
     fn try_remove(&mut self, key: &K) -> Option<K> {
@@ -112,7 +100,7 @@ pub struct QueuedLookupRegistry<KeyExt, K>
 where
     KeyExt: KeyExtension<K>,
 {
-    key_idx_map: HashMap<K, usize>,
+    idx_lookup: HashMap<K, usize>,
     /// keys ordered by insertion in DESC order, i.e. latest in back, earliest in front (just as for Vec)
     ordered_keys: VecDeque<KeyExt>,
     max_capacity: usize,
@@ -133,12 +121,12 @@ where
             .enumerate()
             .map(|(idx, tk)| (tk.key().clone(), idx))
             .collect();
-        self.key_idx_map = key_idx_map_udpated;
+        self.idx_lookup = key_idx_map_udpated;
     }
 
     // dangerous operation
     fn update_indices_with_shift(&mut self, shift: usize) {
-        for (_, idx) in self.key_idx_map.iter_mut() {
+        for (_, idx) in self.idx_lookup.iter_mut() {
             let shifted_idx = *idx - shift;
             *idx = shifted_idx;
         }
@@ -147,7 +135,7 @@ where
     fn delete_oldest(&mut self) -> Option<KeyExt> {
         let first = self.ordered_keys.pop_front();
         if let Some(k) = &first {
-            self.key_idx_map.remove(&k.key().clone());
+            self.idx_lookup.remove(&k.key().clone());
         }
         self.update_indices_with_shift(1);
         first
@@ -155,7 +143,7 @@ where
 
     fn remove_key(&mut self, key: &K) -> Option<KeyExt> {
         let key = self
-            .key_idx_map
+            .idx_lookup
             .remove(key)
             .and_then(|idx| self.ordered_keys.remove(idx));
         if key.is_some() {
@@ -166,7 +154,7 @@ where
 
     fn insert(&mut self, key: KeyExt) {
         let len = self.len();
-        self.key_idx_map.insert(key.key().clone(), len);
+        self.idx_lookup.insert(key.key().clone(), len);
         // let timed_key = TimedKey::create_now(key);
         self.ordered_keys.push_back(key);
     }
@@ -179,7 +167,7 @@ where
 {
     /// Takes O(1) for finding the key.
     fn get(&self, key: &K) -> Option<&K> {
-        self.key_idx_map.get(key).map(|&idx| {
+        self.idx_lookup.get(key).map(|&idx| {
             let tk = self.ordered_keys[idx].key();
             if tk == key {
                 tk
@@ -199,7 +187,7 @@ where
 
     fn with_capacity(max_capacity: usize) -> Self {
         Self {
-            key_idx_map: HashMap::with_capacity(max_capacity),
+            idx_lookup: HashMap::with_capacity(max_capacity),
             ordered_keys: VecDeque::with_capacity(max_capacity),
             max_capacity,
             _phantom_data: std::marker::PhantomData::<K>,
@@ -207,12 +195,12 @@ where
     }
 
     fn clear(&mut self) {
-        self.key_idx_map.clear();
+        self.idx_lookup.clear();
         self.ordered_keys.clear();
     }
 
     fn len(&self) -> usize {
-        if self.key_idx_map.len() != self.ordered_keys.len() {
+        if self.idx_lookup.len() != self.ordered_keys.len() {
             panic!("invalid state of key registry");
         }
         self.ordered_keys.len()
@@ -231,19 +219,6 @@ where
         self.insert(key);
         deleted_key.map(|tk| tk.key().clone())
     }
-    // // Takes O(n) in case the key is present, or if storage is full, and O(1) otherwise.
-    // fn add_or_update(&mut self, key: K) -> Option<K> {
-    //     self.try_remove(&key);
-
-    //     let deleted_key = if self.len() >= self.max_capacity {
-    //         self.delete_oldest()
-    //     } else {
-    //         None
-    //     };
-
-    //     self.insert(key);
-    //     deleted_key.map(|tk| tk.key)
-    // }
 
     // Takes O(n) for re-ordering the lookup.
     fn try_remove(&mut self, key: &K) -> Option<K> {
