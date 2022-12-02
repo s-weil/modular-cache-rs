@@ -5,7 +5,7 @@ pub mod queued_cache;
 
 /*
 TODO:
-    - split key registry in smaller pieces and try to simplify signature of cache wrt number of generics
+    - split key registry in smaller pieces and try to simplify signature of cache wrt number of generics -> avoid key registry at all!
     - expiration policies
     - lru impplementation
     - simplest keyregistry with hashmap! -> doesnt make sense

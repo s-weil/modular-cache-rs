@@ -11,7 +11,7 @@ criterion_group!(
 criterion_main!(benches);
 
 pub fn criterion_timed_cache_v1(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Evaluate the performance of timed cache implementations");
+    let mut group = c.benchmark_group("Evaluate the performance of queued cache implementations");
 
     group.bench_function(
         "TimedCache - v1: n_keys: small, value_size: small, max_capacity: small",
@@ -32,7 +32,7 @@ pub fn criterion_timed_cache_v1(c: &mut Criterion) {
 }
 
 pub fn criterion_timed_cache_v2(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Evaluate the performance of timed cache implementations");
+    let mut group = c.benchmark_group("Evaluate the performance of queued cache implementations");
 
     group.bench_function(
         "TimedCache - v2: n_keys: small, value_size: small, max_capacity: small",
@@ -53,7 +53,7 @@ pub fn criterion_timed_cache_v2(c: &mut Criterion) {
 }
 
 pub fn criterion_timed_cache_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Evaluate the performance of timed cache implementations");
+    let mut group = c.benchmark_group("Evaluate the performance of queued cache implementations");
 
     group.bench_function(
         "TimedCache - comparison - v1: n_keys: high, value_size: low, max_capacity: high",
@@ -69,7 +69,7 @@ pub fn criterion_timed_cache_comparison(c: &mut Criterion) {
 }
 
 pub fn criterion_timed_cache_comparison2(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Evaluate the performance of timed cache implementations");
+    let mut group = c.benchmark_group("Evaluate the performance of queued cache implementations");
 
     group.bench_function(
         "TimedCache - comparison - v1: n_keys: high, value_size: low, max_capacity: high",

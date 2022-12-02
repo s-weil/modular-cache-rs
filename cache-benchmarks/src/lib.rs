@@ -10,6 +10,7 @@ use modular_cache::{
         ConcurrentQueuedCache, ConcurrentQueuedLookupCache, QueuedCache, QueuedLookupCache,
     },
 };
+use rand::Rng;
 // use rand::Rng;
 
 // // Poem by Friedrich Schiller. The corresponding music is the European Anthem.
@@ -98,44 +99,47 @@ fn insert_and_get_seq<R>(
     let mut rng = rand::thread_rng();
     for _ in 0..n_keys {
         let rd_idx = rng.gen_range(0..n_keys);
-        let key = key_values[y]
-    } (k, _) in key_values.iter() {
-        let _ = cache.get(k);
+        let (key, _) = key_values[rd_idx];
+        let _ = cache.get(&key);
     }
 }
 
 pub fn queued_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
-    let key_values = gernerate_key_values(n_keys, value_len);
-
     let mut cache = QueuedCache::<usize, usize, String>::new(Some(max_capacity));
 
-    for (k, v) in key_values.iter() {
-        cache.insert(k.clone(), v.clone());
-    }
-
+    insert_and_get_seq(&mut cache, n_keys, value_len);
     assert!(cache.len() <= max_capacity);
 
-    for (k, _) in key_values.iter() {
-        let _ = cache.get(k);
-    }
+    // let key_values = gernerate_key_values(n_keys, value_len);
+
+    // for (k, v) in key_values.iter() {
+    //     cache.insert(k.clone(), v.clone());
+    // }
+
+    // for (k, _) in key_values.iter() {
+    //     let _ = cache.get(k);
+    // }
 }
 
 pub fn queued_lookup_cache_sequential((max_capacity, n_keys, value_len): (usize, usize, usize)) {
-    let key_values = gernerate_key_values(n_keys, value_len);
-
     let mut cache = QueuedLookupCache::<usize, usize, String>::new(Some(max_capacity));
 
-    for (k, v) in key_values.iter() {
-        cache.insert(k.clone(), v.clone());
-    }
+    insert_and_get_seq(&mut cache, n_keys, value_len);
     assert!(cache.len() <= max_capacity);
 
-    for (k, _) in key_values.iter() {
-        let _ = cache.get(k);
-    }
+    // let key_values = gernerate_key_values(n_keys, value_len);
+
+    // for (k, v) in key_values.iter() {
+    //     cache.insert(k.clone(), v.clone());
+    // }
+    // assert!(cache.len() <= max_capacity);
+
+    // for (k, _) in key_values.iter() {
+    //     let _ = cache.get(k);
+    // }
 }
 
-fn insert_and_get<R>(
+fn insert_and_get_concurrent<R>(
     cache: Arc<ConcurrentCache<usize, R, usize, String>>,
     n_keys: usize,
     value_len: usize,
@@ -148,9 +152,15 @@ fn insert_and_get<R>(
         cache.insert(k.clone(), v.clone());
     }
 
-    for (k, _) in key_values.iter() {
-        let _ = cache.get(k);
+    let mut rng = rand::thread_rng();
+    for _ in 0..n_keys {
+        let rd_idx = rng.gen_range(0..n_keys);
+        let (key, _) = key_values[rd_idx];
+        let _ = cache.get(&key);
     }
+    // for (k, _) in key_values.iter() {
+    //     let _ = cache.get(k);
+    // }
 }
 
 pub fn queued_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, usize)) {
@@ -162,7 +172,7 @@ pub fn queued_cache_parallel((max_capacity, n_keys, value_len): (usize, usize, u
     for _ in 0..4 {
         let thread_cache = cache.clone();
         handles.push(std::thread::spawn(move || {
-            insert_and_get(thread_cache, n_keys, value_len)
+            insert_and_get_concurrent(thread_cache, n_keys, value_len)
         }));
     }
 
@@ -178,7 +188,7 @@ pub fn queued_lookup_cache_parallel((max_capacity, n_keys, value_len): (usize, u
     for _ in 0..4 {
         let thread_cache = cache.clone();
         handles.push(std::thread::spawn(move || {
-            insert_and_get(thread_cache, n_keys, value_len)
+            insert_and_get_concurrent(thread_cache, n_keys, value_len)
         }));
     }
 
